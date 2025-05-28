@@ -13,4 +13,6 @@ internal class ChatCompletionRequest
     public double? Top_P { get; set; }
 
     public int? MaxTokens { get; set; }
+
+    public string ApiKey { get; set; }
 }

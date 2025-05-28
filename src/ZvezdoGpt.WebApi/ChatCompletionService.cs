@@ -1,7 +1,6 @@
 ﻿using OpenAI.Chat;
 using System.Text.Json;
 using ZvezdoGpt.WebApi.Dtos;
-using ChatMessageContentPart = ZvezdoGpt.WebApi.Dtos.ChatMessageContentPart;
 
 internal class ChatCompletionService(ChatClient chatClient)
 {
@@ -17,19 +16,11 @@ internal class ChatCompletionService(ChatClient chatClient)
 
         await foreach (var completionUpdate in chatClient.CompleteChatStreamingAsync(messages))
         {
-            var responseContent = string.Concat(completionUpdate.ContentUpdate.Where(x => x.Kind is ChatMessageContentPartKind.Text).Select(x => x.Text));
+            var response = string.Concat(completionUpdate.ContentUpdate.Where(x => x.Kind is ChatMessageContentPartKind.Text).Select(x => x.Text));
 
-            if (!string.IsNullOrEmpty(responseContent))
+            if (!string.IsNullOrEmpty(response))
             {
-                var payload = new
-                {
-                    id = Guid.NewGuid().ToString(),
-                    @object = "chat.completion.chunk",
-                    created = DateTimeOffset.UtcNow.ToUnixTimeSeconds(),
-                    choices = new[] { new { delta = new { content = responseContent } } }
-                };
-
-                yield return JsonSerializer.Serialize(payload);
+                yield return response;
             }
         }
     }
@@ -48,5 +39,12 @@ internal class ChatCompletionService(ChatClient chatClient)
         }
 
         return dto.Role == "user" ? new UserChatMessage(content) : new AssistantChatMessage(content);
+    }
+
+    private class ChatMessageContentPart
+    {
+        public string Type { get; set; }
+
+        public string Text { get; set; }
     }
 }

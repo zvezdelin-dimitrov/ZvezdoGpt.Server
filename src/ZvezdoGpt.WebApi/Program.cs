@@ -1,7 +1,7 @@
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.Identity.Web;
 using OpenAI;
-using ZvezdoGpt.WebApi.Dtos;
+using System.Text;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -9,6 +9,8 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
                 .AddMicrosoftIdentityWebApi(builder.Configuration.GetSection("AzureAd"));
 builder.Services.AddAuthorization();
 builder.Services.AddCors();
+
+builder.Services.AddSingleton<CosmosDbService>();
 
 builder.Services.AddSingleton<Func<string, string, ChatCompletionService>>(
     (apiKey, model) => new ChatCompletionService(new OpenAIClient(apiKey).GetChatClient(model)));
@@ -20,40 +22,45 @@ app.UseAuthentication();
 app.UseAuthorization();
 app.UseCors(c => c.AllowAnyOrigin().AllowAnyHeader().AllowAnyMethod());
 
-//var scopeRequiredByApi = app.Configuration["AzureAd:Scopes"] ?? string.Empty;
-
-app.MapPost("/v1/chat/completions", async (HttpContext context, Func<string, string, ChatCompletionService> chatServiceFactory) =>
+app.MapPost("/v1/chat/completions", async (HttpContext context, Func<string, string, ChatCompletionService> chatServiceFactory, CosmosDbService cosmosDbService) =>
 {
-    //context.VerifyUserHasAnyAcceptedScope(scopeRequiredByApi);
-
-    string apiKey = null;
-    try
+    var request = await ResponseHelper.Validate(context);
+    if (request is null)
     {
-        apiKey = context.Request.Headers.Authorization[0]["Bearer ".Length..].Trim();
-    }
-    catch
-    {
-    }
-
-    if (string.IsNullOrEmpty(apiKey))
-    {
-        context.Response.StatusCode = StatusCodes.Status401Unauthorized;
-        return;
-    }
-
-    var request = await context.Request.ReadFromJsonAsync<ChatCompletionRequest>();
-    if (request is null || !request.Stream || string.IsNullOrEmpty(request.Model))
-    {
-        context.Response.StatusCode = StatusCodes.Status400BadRequest;
         return;
     }
 
     context.Response.ContentType = "text/event-stream";
 
-    await foreach (var jsonResponse in chatServiceFactory(apiKey, request.Model).Complete(request.Messages))
+    if (request.Messages.Count == 1)
     {
-        await context.Response.WriteAsync($"data: {jsonResponse}\n\n");
-        await context.Response.Body.FlushAsync();
+        var question = request.Messages[0].Content.ToString();
+        var embedding = await new OpenAIClient(request.ApiKey).GetEmbeddingClient("text-embedding-3-small").GenerateEmbeddingAsync(question);
+        var vector = embedding.Value.ToFloats().ToArray();
+        var cachedAnswer = await cosmosDbService.GetAnswer(vector);
+        
+        if (cachedAnswer is not null)
+        {
+            await ResponseHelper.ProcessChatResponse(cachedAnswer, context.Response);
+        }
+        else
+        {
+            var aggregatedAnswer = new StringBuilder();
+
+            await foreach (var chatResponse in chatServiceFactory(request.ApiKey, request.Model).Complete(request.Messages))
+            {
+                await ResponseHelper.ProcessChatResponse(chatResponse, context.Response, aggregatedAnswer);
+            }
+
+            await cosmosDbService.AddQuestion(question, aggregatedAnswer.ToString(), vector);
+        }
+    }
+    else
+    {
+        await foreach (var chatResponse in chatServiceFactory(request.ApiKey, request.Model).Complete(request.Messages))
+        {
+            await ResponseHelper.ProcessChatResponse(chatResponse, context.Response);
+        }
     }
 
     await context.Response.WriteAsync("data: [DONE]\n\n");
