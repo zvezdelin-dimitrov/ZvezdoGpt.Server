@@ -1,10 +1,12 @@
-﻿using System.Text;
+﻿using OpenAI.Chat;
+using System.Text;
 using System.Text.Json;
 using ZvezdoGpt.WebApi.Dtos;
 
-internal class ChatCompletionRequestHandler(IHttpContextAccessor contextAccessor, Func<string, string, ChatCompletionService> chatServiceFactory, Func<string, EmbeddingService> embeddingServiceFactory, CosmosDbService cosmosDbService)
+internal class ChatCompletionRequestHandler(IHttpContextAccessor contextAccessor, IConfiguration configuration, Func<string, string, ChatCompletionService> chatServiceFactory, Func<string, EmbeddingService> embeddingServiceFactory, CosmosDbService cosmosDbService)
 {
     private readonly HttpContext context = contextAccessor.HttpContext;
+    private readonly HashSet<int> cacheWindowSizes = new(Enumerable.Range(1, configuration.GetValue("ContextWindow", 1)).Where(i => i % 2 == 1));
 
     public async Task Handle()
     {
@@ -16,9 +18,11 @@ internal class ChatCompletionRequestHandler(IHttpContextAccessor contextAccessor
 
         context.Response.ContentType = "text/event-stream";
 
-        if (request.Messages.Count == 1)
+        var messages = request.Messages.ToChatMessages().ToList();
+
+        if (cacheWindowSizes.Contains(messages.Count))
         {
-            var question = request.Messages[0].Content.ToString();
+            var question = string.Join("|", messages.Select(m => $"{(m is UserChatMessage ? "user" : "assistant")}:{string.Join(string.Empty, m.Content.Select(x => x.Text))}"));
             var vector = await embeddingServiceFactory(request.ApiKey).GetVector(question);
             var cachedAnswer = await cosmosDbService.GetAnswer(vector);
 
@@ -30,7 +34,7 @@ internal class ChatCompletionRequestHandler(IHttpContextAccessor contextAccessor
             {
                 var aggregatedAnswer = new StringBuilder();
 
-                await foreach (var chatResponse in chatServiceFactory(request.ApiKey, request.Model).Complete(request.Messages))
+                await foreach (var chatResponse in chatServiceFactory(request.ApiKey, request.Model).Complete(messages))
                 {
                     await ProcessChatResponse(chatResponse, context.Response, aggregatedAnswer);
                 }
@@ -40,7 +44,7 @@ internal class ChatCompletionRequestHandler(IHttpContextAccessor contextAccessor
         }
         else
         {
-            await foreach (var chatResponse in chatServiceFactory(request.ApiKey, request.Model).Complete(request.Messages))
+            await foreach (var chatResponse in chatServiceFactory(request.ApiKey, request.Model).Complete(messages))
             {
                 await ProcessChatResponse(chatResponse, context.Response);
             }
