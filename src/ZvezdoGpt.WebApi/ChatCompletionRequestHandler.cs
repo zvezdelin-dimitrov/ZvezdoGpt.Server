@@ -39,7 +39,7 @@ internal class ChatCompletionRequestHandler(IHttpContextAccessor contextAccessor
                     await ProcessChatResponse(chatResponse, context.Response, aggregatedAnswer);
                 }
 
-                await cosmosDbService.AddQuestion(question, aggregatedAnswer.ToString(), vector);
+                await cosmosDbService.AddQuestion(question, aggregatedAnswer.ToString(), vector, request.Model);
             }
         }
         else
