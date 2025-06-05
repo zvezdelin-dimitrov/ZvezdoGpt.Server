@@ -4,6 +4,7 @@ internal class CosmosDbService
 {
     private readonly Container container;
     private readonly string embeddingModel;
+    private readonly double vectorDistanceThreshold;
 
     public CosmosDbService(IConfiguration configuration)
     {
@@ -11,7 +12,9 @@ internal class CosmosDbService
         var dbClient = new CosmosClient(config.Account, config.Key);
         var db = dbClient.GetDatabase(config.DatabaseName);
         container = db.GetContainer(config.ContainerName);
+
         embeddingModel = configuration["EmbeddingModel"];
+        vectorDistanceThreshold = configuration.GetValue<double>("VectorDistanceThreshold");
     }
 
     public Task AddQuestion(string question, string answer, float[] vector, string answerGenerationModel) 
@@ -26,7 +29,7 @@ internal class CosmosDbService
             "ORDER BY VectorDistance(c.vector, @embedding)")
             .WithParameter("@embedding", vector)
             .WithParameter("@embeddingModel", embeddingModel)
-            .WithParameter("@threshold", 0.8);
+            .WithParameter("@threshold", vectorDistanceThreshold);
 
         using var feed = container.GetItemQueryIterator<AnswerResponse>(query);
         var answer = (await feed.ReadNextAsync()).SingleOrDefault();
