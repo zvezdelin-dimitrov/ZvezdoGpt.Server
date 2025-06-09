@@ -3,14 +3,14 @@ using System.Text;
 using System.Text.Json;
 using ZvezdoGpt.WebApi.Dtos;
 
-internal class ChatCompletionRequestHandler(IHttpContextAccessor contextAccessor, IConfiguration configuration, Func<string, string, ChatCompletionService> chatServiceFactory, Func<string, EmbeddingService> embeddingServiceFactory, CosmosDbService cosmosDbService)
+internal class ChatCompletionRequestHandler(IHttpContextAccessor contextAccessor, IConfiguration configuration, Func<string, string, ChatCompletionService> chatServiceFactory, Func<string, EmbeddingService> embeddingServiceFactory, CosmosDbService cosmosDbService, bool openAiCompatible)
 {
     private readonly HttpContext context = contextAccessor.HttpContext;
     private readonly HashSet<int> cacheWindowSizes = new(Enumerable.Range(1, configuration.GetValue("ContextWindow", 1)).Where(i => i % 2 == 1));
 
     public async Task Handle()
     {
-        var request = await Validate(context);
+        var request = await Validate();
         if (request is null)
         {
             return;
@@ -70,22 +70,27 @@ internal class ChatCompletionRequestHandler(IHttpContextAccessor contextAccessor
         aggregateResponse?.Append(chatResponse);
     }
 
-    private static async Task<ChatCompletionRequest> Validate(HttpContext context)
+    private async Task<ChatCompletionRequest> Validate()
     {
-        //var scopeRequiredByApi = app.Configuration["AzureAd:Scopes"];
-        //context.VerifyUserHasAnyAcceptedScope(scopeRequiredByApi);
-
         string apiKey = null;
-        try
+
+        if (openAiCompatible)
         {
-            apiKey = context.Request.Headers.Authorization[0]["Bearer ".Length..].Trim();
+            const string Bearer = "Bearer ";
+            apiKey = context.Request.Headers.Authorization.FirstOrDefault(x => x.StartsWith(Bearer))?[Bearer.Length..]?.Trim();
         }
-        catch
+        else
         {
+            apiKey = context.Request.Headers["X-API-KEY"].FirstOrDefault()?.Trim();
         }
 
         if (string.IsNullOrEmpty(apiKey))
         {
+            if (!openAiCompatible && context.User.Identity.IsAuthenticated)
+            {
+                // TODO: Try to get stored api key for the user
+            }
+
             context.Response.StatusCode = StatusCodes.Status401Unauthorized;
             return null;
         }

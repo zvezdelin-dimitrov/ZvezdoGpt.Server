@@ -17,7 +17,8 @@ builder.Services.AddSingleton<Func<string, string, ChatCompletionService>>(
 builder.Services.AddSingleton<Func<string, EmbeddingService>>(
     (apiKey) => new EmbeddingService(new OpenAIClient(apiKey).GetEmbeddingClient(builder.Configuration["EmbeddingModel"])));
 
-builder.Services.AddTransient<ChatCompletionRequestHandler>();
+builder.Services.AddTransient<Func<bool, ChatCompletionRequestHandler>>(serviceProvider =>
+    openAiCompatible => ActivatorUtilities.CreateInstance<ChatCompletionRequestHandler>(serviceProvider, openAiCompatible));
 
 var app = builder.Build();
 
@@ -26,6 +27,8 @@ app.UseAuthentication();
 app.UseAuthorization();
 app.UseCors(c => c.AllowAnyOrigin().AllowAnyHeader().AllowAnyMethod());
 
-app.MapPost("/v1/chat/completions", (ChatCompletionRequestHandler handler) => handler.Handle());//.RequireAuthorization();
+app.MapPost("/v9/chat/completions", (Func<bool, ChatCompletionRequestHandler> handler) => handler(false).Handle());
+
+app.MapPost("/v1/chat/completions", (Func<bool, ChatCompletionRequestHandler> handler) => handler(true).Handle());
 
 app.Run();
