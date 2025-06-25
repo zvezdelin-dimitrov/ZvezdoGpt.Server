@@ -10,6 +10,7 @@ builder.Services.AddAuthorization();
 builder.Services.AddCors();
 
 builder.Services.AddSingleton<CosmosDbService>();
+builder.Services.AddSingleton<ModelsProvider>();
 
 builder.Services.AddSingleton<Func<string, string, ChatCompletionService>>(
     (apiKey, model) => new ChatCompletionService(new OpenAIClient(apiKey).GetChatClient(model)));
@@ -27,8 +28,10 @@ app.UseAuthentication();
 app.UseAuthorization();
 app.UseCors(c => c.AllowAnyOrigin().AllowAnyHeader().AllowAnyMethod());
 
-app.MapPost("/v9/chat/completions", (Func<bool, ChatCompletionRequestHandler> handler) => handler(false).Handle());
+app.MapGet("/v9/models", (ModelsProvider provider) => provider.GetModels());
+app.MapGet("/v1/models", (ModelsProvider provider) => provider.GetModels());
 
+app.MapPost("/v9/chat/completions", (Func<bool, ChatCompletionRequestHandler> handler) => handler(false).Handle());
 app.MapPost("/v1/chat/completions", (Func<bool, ChatCompletionRequestHandler> handler) => handler(true).Handle());
 
 app.Run();
