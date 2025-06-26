@@ -1,6 +1,12 @@
-﻿internal class ModelsProvider(IConfiguration configuration)
+﻿internal class ModelsProvider
 {
-    private readonly string[] supportedModels = configuration["SupportedModels"].Split('|');
+    public ModelsProvider(IConfiguration configuration)
+    {
+        SupportedModels = configuration["SupportedModels"].Split('|').ToHashSet();
+        SupportedModelsResponse = new { data = SupportedModels.Select(model => new { id = model }).ToList() };
+    }
 
-    public object GetModels() => new { data = supportedModels.Select(model => new { id = model }) };
+    public ISet<string> SupportedModels { get; }
+
+    public object SupportedModelsResponse { get; }
 }

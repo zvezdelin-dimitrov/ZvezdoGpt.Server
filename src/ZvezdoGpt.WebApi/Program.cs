@@ -28,8 +28,8 @@ app.UseAuthentication();
 app.UseAuthorization();
 app.UseCors(c => c.AllowAnyOrigin().AllowAnyHeader().AllowAnyMethod());
 
-app.MapGet("/v9/models", (ModelsProvider provider) => provider.GetModels());
-app.MapGet("/v1/models", (ModelsProvider provider) => provider.GetModels());
+app.MapGet("/v9/models", (ModelsProvider provider) => provider.SupportedModelsResponse);
+app.MapGet("/v1/models", (ModelsProvider provider) => provider.SupportedModelsResponse);
 
 app.MapPost("/v9/chat/completions", (Func<bool, ChatCompletionRequestHandler> handler) => handler(false).Handle());
 app.MapPost("/v1/chat/completions", (Func<bool, ChatCompletionRequestHandler> handler) => handler(true).Handle());

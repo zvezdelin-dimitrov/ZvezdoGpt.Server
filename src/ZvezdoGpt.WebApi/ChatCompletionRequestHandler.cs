@@ -3,7 +3,7 @@ using System.Text;
 using System.Text.Json;
 using ZvezdoGpt.WebApi.Dtos;
 
-internal class ChatCompletionRequestHandler(IHttpContextAccessor contextAccessor, IConfiguration configuration, Func<string, string, ChatCompletionService> chatServiceFactory, Func<string, EmbeddingService> embeddingServiceFactory, CosmosDbService cosmosDbService, bool openAiCompatible)
+internal class ChatCompletionRequestHandler(IHttpContextAccessor contextAccessor, IConfiguration configuration, ModelsProvider modelsProvider, Func<string, string, ChatCompletionService> chatServiceFactory, Func<string, EmbeddingService> embeddingServiceFactory, CosmosDbService cosmosDbService, bool openAiCompatible)
 {
     private readonly HttpContext context = contextAccessor.HttpContext;
     private readonly HashSet<int> cacheWindowSizes = new(Enumerable.Range(1, configuration.GetValue("ContextWindow", 1)).Where(i => i % 2 == 1));
@@ -96,7 +96,7 @@ internal class ChatCompletionRequestHandler(IHttpContextAccessor contextAccessor
         }
 
         var request = await context.Request.ReadFromJsonAsync<ChatCompletionRequest>();
-        if (request is null || !request.Stream || string.IsNullOrEmpty(request.Model))
+        if (request is null || !request.Stream || !modelsProvider.SupportedModels.Contains(request.Model))
         {
             context.Response.StatusCode = StatusCodes.Status400BadRequest;
             return null;
