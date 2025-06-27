@@ -9,6 +9,9 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
 builder.Services.AddAuthorization();
 builder.Services.AddCors();
 
+builder.Services.Configure<JwtBearerOptions>(JwtBearerDefaults.AuthenticationScheme, options =>
+    options.TokenValidationParameters.NameClaimType = "preferred_username");
+
 builder.Services.AddSingleton<CosmosDbService>();
 builder.Services.AddSingleton<ModelsProvider>();
 
