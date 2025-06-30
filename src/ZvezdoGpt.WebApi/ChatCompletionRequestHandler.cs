@@ -72,25 +72,10 @@ internal class ChatCompletionRequestHandler(IHttpContextAccessor contextAccessor
 
     private async Task<ChatCompletionRequest> Validate()
     {
-        string apiKey = null;
-
-        if (openAiCompatible)
-        {
-            const string Bearer = "Bearer ";
-            apiKey = context.Request.Headers.Authorization.FirstOrDefault(x => x.StartsWith(Bearer))?[Bearer.Length..]?.Trim();
-        }
-        else
-        {
-            apiKey = context.Request.Headers["X-API-KEY"].FirstOrDefault()?.Trim();
-        }
+        var apiKey = await GetApiKey();
 
         if (string.IsNullOrEmpty(apiKey))
         {
-            if (!openAiCompatible && context.User.Identity.IsAuthenticated)
-            {
-                // TODO: Try to get stored api key for the user
-            }
-
             context.Response.StatusCode = StatusCodes.Status401Unauthorized;
             return null;
         }
@@ -105,5 +90,27 @@ internal class ChatCompletionRequestHandler(IHttpContextAccessor contextAccessor
         request.ApiKey = apiKey;
 
         return request;
+    }
+
+    private async Task<string> GetApiKey()
+    {
+        string apiKey;
+
+        if (openAiCompatible)
+        {
+            const string Bearer = "Bearer ";
+            apiKey = context.Request.Headers.Authorization.FirstOrDefault(x => x.StartsWith(Bearer))?[Bearer.Length..]?.Trim();
+        }
+        else
+        {
+            apiKey = context.Request.Headers["X-API-KEY"].FirstOrDefault()?.Trim();
+        }
+
+        if (string.IsNullOrEmpty(apiKey) && context.User.Identity.IsAuthenticated)
+        {
+            apiKey = await cosmosDbService.GetApiKey(context.User.Identity.Name);
+        }
+
+        return apiKey;
     }
 }

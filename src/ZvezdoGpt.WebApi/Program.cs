@@ -14,6 +14,7 @@ builder.Services.Configure<JwtBearerOptions>(JwtBearerDefaults.AuthenticationSch
 
 builder.Services.AddSingleton<CosmosDbService>();
 builder.Services.AddSingleton<ModelsProvider>();
+builder.Services.AddTransient<UserDataRequestHandler>();
 
 builder.Services.AddSingleton<Func<string, string, ChatCompletionService>>(
     (apiKey, model) => new ChatCompletionService(new OpenAIClient(apiKey).GetChatClient(model)));
@@ -30,6 +31,8 @@ app.UseHttpsRedirection();
 app.UseAuthentication();
 app.UseAuthorization();
 app.UseCors(c => c.AllowAnyOrigin().AllowAnyHeader().AllowAnyMethod());
+
+app.MapPost("/v9/user/apikey", (UserDataRequestHandler handler) => handler.SaveApiKey()).RequireAuthorization();
 
 app.MapGet("/v9/models", (ModelsProvider provider) => provider.SupportedModelsResponse);
 app.MapGet("/v1/models", (ModelsProvider provider) => provider.SupportedModelsResponse);
