@@ -1,4 +1,4 @@
-﻿internal class UserDataRequestHandler(IHttpContextAccessor contextAccessor, CosmosDbService cosmosDbService)
+﻿internal class UserDataRequestHandler(IHttpContextAccessor contextAccessor, CosmosDbService cosmosDbService, ModelsProvider modelsProvider)
 {
     public async Task<IResult> SaveApiKey()
     {
@@ -12,4 +12,20 @@
 
         return Results.Ok();
     }
+
+    public async Task<IResult> SavePreferredModel()
+    {
+        var model = await contextAccessor.HttpContext.Request.ReadFromJsonAsync<string>();
+        if (string.IsNullOrWhiteSpace(model) || !modelsProvider.SupportedModels.Contains(model)) 
+        {
+            return Results.BadRequest();
+        }
+
+        await cosmosDbService.SavePreferredModel(contextAccessor.HttpContext.User.Identity.Name, model);
+
+        return Results.Ok();
+    }
+
+    public Task<string> GetPreferredModel()
+        => cosmosDbService.GetPreferredModel(contextAccessor.HttpContext.User.Identity.Name);
 }

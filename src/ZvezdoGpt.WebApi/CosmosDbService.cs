@@ -39,16 +39,53 @@ internal class CosmosDbService
         return answer?.Answer;
     }
 
-    public Task SaveApiKey(string username, string apiKey)
-        => userDataContainer.UpsertItemAsync(new { id = username.ToLowerInvariant(), apiKey });
+    public async Task SaveApiKey(string username, string apiKey)
+    {
+        var id = username.ToLowerInvariant();
+        try
+        {
+            await userDataContainer.PatchItemAsync<UserDataResponse>(id, new PartitionKey(id), [PatchOperation.Set("/apiKey", apiKey)]);
+        }
+        catch (CosmosException e) when (e.StatusCode == HttpStatusCode.NotFound)
+        {
+            await userDataContainer.UpsertItemAsync(new { id, apiKey });
+        }
+    }
 
     public async Task<string> GetApiKey(string username)
     {
+        var id = username.ToLowerInvariant();
         try
         {
-            var id = username.ToLowerInvariant();
             var response = await userDataContainer.ReadItemAsync<UserDataResponse>(id, new PartitionKey(id));
             return response.Resource.ApiKey;
+        }
+        catch (CosmosException e) when (e.StatusCode == HttpStatusCode.NotFound)
+        {
+            return null;
+        }
+    }
+
+    public async Task SavePreferredModel(string username, string preferredModel)
+    {
+        var id = username.ToLowerInvariant();
+        try
+        {
+            await userDataContainer.PatchItemAsync<UserDataResponse>(id, new PartitionKey(id), [PatchOperation.Set("/preferredModel", preferredModel)]);
+        }
+        catch (CosmosException e) when (e.StatusCode == HttpStatusCode.NotFound)
+        {
+            await userDataContainer.UpsertItemAsync(new { id, preferredModel });
+        }
+    }
+
+    public async Task<string> GetPreferredModel(string username)
+    {
+        var id = username.ToLowerInvariant();
+        try
+        {
+            var response = await userDataContainer.ReadItemAsync<UserDataResponse>(id, new PartitionKey(id));
+            return response.Resource.PreferredModel;
         }
         catch (CosmosException e) when (e.StatusCode == HttpStatusCode.NotFound)
         {
@@ -64,6 +101,8 @@ internal class CosmosDbService
     private class UserDataResponse
     {
         public string ApiKey { get; set; }
+
+        public string PreferredModel { get; set; }
     }
 
     private class CosmosDbConfig

@@ -33,6 +33,8 @@ app.UseAuthorization();
 app.UseCors(c => c.AllowAnyOrigin().AllowAnyHeader().AllowAnyMethod());
 
 app.MapPost("/v9/user/apikey", (UserDataRequestHandler handler) => handler.SaveApiKey()).RequireAuthorization();
+app.MapPost("/v9/user/preferred-model", (UserDataRequestHandler handler) => handler.SavePreferredModel()).RequireAuthorization();
+app.MapGet("/v9/user/preferred-model", (UserDataRequestHandler handler) => handler.GetPreferredModel()).RequireAuthorization();
 
 app.MapGet("/v9/models", (ModelsProvider provider) => provider.SupportedModelsResponse);
 app.MapGet("/v1/models", (ModelsProvider provider) => provider.SupportedModelsResponse);
